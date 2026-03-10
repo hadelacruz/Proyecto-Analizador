@@ -1,0 +1,11 @@
+{
+import tokens
+}
+
+let digit = ['0'-'9']
+let letter = ['a'-'z''A'-'Z']
+
+rule gettoken =
+    [' ' '\t']  { /* ignore */ }
+  | ['0'-'9']+  { return NUMBER }
+  | '+'         { return PLUS }
