@@ -1,0 +1,128 @@
+(* Analizador Léxico para Java *)
+
+(* Definiciones de macros reutilizables *)
+let digit = ['0'-'9']
+let letter = ['a'-'z''A'-'Z']
+let alphanum = ['a'-'z''A'-'Z''0'-'9']
+let identifier = letter (alphanum | '_')*
+let integer = digit+
+let decimal = digit+ '.' digit+
+let whitespace = [' ' '\t' '\r']
+let newline = '\n'
+
+(* Regla principal para reconocer tokens *)
+rule getToken =
+    (* Ignorar espacios en blanco *)
+    [' ' '\t']          { return lexbuf }
+  | '\n'                { return EOL }
+  
+  (* Palabras reservadas *)
+  | "abstract"          { return ABSTRACT }
+  | "boolean"           { return BOOLEAN }
+  | "break"             { return BREAK }
+  | "byte"              { return BYTE }
+  | "case"              { return CASE }
+  | "catch"             { return CATCH }
+  | "char"              { return CHAR }
+  | "class"             { return CLASS }
+  | "const"             { return CONST }
+  | "continue"          { return CONTINUE }
+  | "default"           { return DEFAULT }
+  | "do"                { return DO }
+  | "double"            { return DOUBLE }
+  | "else"              { return ELSE }
+  | "extends"           { return EXTENDS }
+  | "false"             { return FALSE }
+  | "final"             { return FINAL }
+  | "finally"           { return FINALLY }
+  | "float"             { return FLOAT }
+  | "for"               { return FOR }
+  | "if"                { return IF }
+  | "import"            { return IMPORT }
+  | "instanceof"        { return INSTANCEOF }
+  | "int"               { return INT }
+  | "interface"         { return INTERFACE }
+  | "long"              { return LONG }
+  | "native"            { return NATIVE }
+  | "new"               { return NEW }
+  | "null"              { return NULL }
+  | "package"           { return PACKAGE }
+  | "private"           { return PRIVATE }
+  | "protected"         { return PROTECTED }
+  | "public"            { return PUBLIC }
+  | "return"            { return RETURN }
+  | "short"             { return SHORT }
+  | "static"            { return STATIC }
+  | "super"             { return SUPER }
+  | "switch"            { return SWITCH }
+  | "synchronized"      { return SYNCHRONIZED }
+  | "this"              { return THIS }
+  | "throw"             { return THROW }
+  | "throws"            { return THROWS }
+  | "transient"         { return TRANSIENT }
+  | "true"              { return TRUE }
+  | "try"               { return TRY }
+  | "void"              { return VOID }
+  | "volatile"          { return VOLATILE }
+  | "while"             { return WHILE }
+  
+  (* Operadores relacionales *)
+  | "=="                { return EQUAL }
+  | "!="                { return NOT_EQUAL }
+  | "<="                { return LESS_EQUAL }
+  | ">="                { return GREATER_EQUAL }
+  | '<'                 { return LESS_THAN }
+  | '>'                 { return GREATER_THAN }
+  
+  (* Operadores lógicos *)
+  | "&&"                { return AND }
+  | "||"                { return OR }
+  | '!'                 { return NOT }
+  
+  (* Operadores aritméticos *)
+  | '+'                 { return PLUS }
+  | '-'                 { return MINUS }
+  | '*'                 { return TIMES }
+  | '/'                 { return DIV }
+  | '%'                 { return MODULO }
+  
+  (* Operadores de asignación *)
+  | '='                 { return ASSIGN }
+  | "+="                { return PLUS_ASSIGN }
+  | "-="                { return MINUS_ASSIGN }
+  | "*="                { return MULT_ASSIGN }
+  | "/="                { return DIV_ASSIGN }
+  
+  (* Operadores de incremento/decremento *)
+  | "++"                { return INCREMENT }
+  | "--"                { return DECREMENT }
+  
+  (* Delimitadores *)
+  | '('                 { return LPAREN }
+  | ')'                 { return RPAREN }
+  | '{'                 { return LBRACE }
+  | '}'                 { return RBRACE }
+  | '['                 { return LBRACKET }
+  | ']'                 { return RBRACKET }
+  | ';'                 { return SEMICOLON }
+  | ','                 { return COMMA }
+  | '.'                 { return DOT }
+  
+  (* Literales *)
+  | ['0'-'9']+ '.' ['0'-'9']+ { return FLOAT_LITERAL }
+  | ['0'-'9']+          { return INT_LITERAL }
+  | '"' ([^'"'] | '\\' _)* '"' { return STRING_LITERAL }
+  | "'" ([^"'"] | '\\' _) "'" { return CHAR_LITERAL }
+  
+  (* Identificadores *)
+  | letter (alphanum | '_')* { return IDENTIFIER }
+  
+  (* Comentarios *)
+  | "//" [^'\n']*       { return lexbuf }
+  | "(*" ([^'*'] | '*' [^')'])* "*)" { return lexbuf }
+  
+  (* Fin de archivo *)
+  | eof                 { return EOF }
+  
+  (* Error léxico *)
+  | _                   { return ERROR }

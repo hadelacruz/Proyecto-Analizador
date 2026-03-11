@@ -9,7 +9,7 @@ def main():
         yal_file = sys.argv[1]
     else:
         # Use default example file
-        yal_file = "lexer.yal"
+        yal_file = "java_lexer.yal"
     
     # Check if file exists
     if not os.path.exists(yal_file):
@@ -28,7 +28,7 @@ def main():
         # Display the parsed specification
         spec.display()
         
-        print("\n✓ Parsing completed successfully!")
+        print("\n[OK] Parsing completed successfully!")
         return 0
         
     except SyntaxError as e:

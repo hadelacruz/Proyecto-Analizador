@@ -3,6 +3,7 @@ import re
 
 
 class YalexParser:
+    """Parser for .yal lexical specification files following yalex syntax."""
     
     def __init__(self):
         self.spec = YalexSpecification()
@@ -53,6 +54,7 @@ class YalexParser:
             self.pos += 1
     
     def _skip_whitespace_and_comments(self):
+        """Skip whitespace and block comments (* ... *)"""
         while self.pos < len(self.content):
             ch = self._current_char()
             
@@ -61,12 +63,16 @@ class YalexParser:
                 self._advance()
                 continue
             
-            # Skip line comments starting with //
-            if ch == '/' and self._peek_char() == '/':
-                self._advance()  # skip first /
-                self._advance()  # skip second /
-                # Skip until end of line
-                while self._current_char() and self._current_char() != '\n':
+            # Skip block comments (* ... *)
+            if ch == '(' and self._peek_char() == '*':
+                self._advance()  # skip (
+                self._advance()  # skip *
+                # Skip until we find *)
+                while self.pos < len(self.content):
+                    if self._current_char() == '*' and self._peek_char() == ')':
+                        self._advance()  # skip *
+                        self._advance()  # skip )
+                        break
                     self._advance()
                 continue
             
@@ -206,10 +212,15 @@ class YalexParser:
                 break
     
     def _parse_pattern(self) -> str:
+        """
+        Parse a regex pattern until we hit { for the action.
+        Handles character classes, quotes, and parentheses.
+        """
         start_pos = self.pos
         in_char_class = False
         in_string = False
         string_char = None
+        paren_depth = 0  # Track parentheses depth
         
         while self.pos < len(self.content):
             ch = self._current_char()
@@ -222,6 +233,17 @@ class YalexParser:
             
             if ch == ']' and in_char_class and not in_string:
                 in_char_class = False
+                self._advance()
+                continue
+            
+            # Handle parentheses (for grouping in regex)
+            if ch == '(' and not in_char_class and not in_string:
+                paren_depth += 1
+                self._advance()
+                continue
+            
+            if ch == ')' and not in_char_class and not in_string and paren_depth > 0:
+                paren_depth -= 1
                 self._advance()
                 continue
             
@@ -239,15 +261,15 @@ class YalexParser:
                     continue
             
             # If we hit { and we're not inside a character class or string, we're done
-            if ch == '{' and not in_char_class and not in_string:
+            if ch == '{' and not in_char_class and not in_string and paren_depth == 0:
                 break
             
-            # If we hit | and we're not inside a character class or string, we're done
-            if ch == '|' and not in_char_class and not in_string:
+            # If we hit | and we're not inside a character class, string, or parentheses, we're done
+            if ch == '|' and not in_char_class and not in_string and paren_depth == 0:
                 break
             
             # Stop at newline if not in special context (for macro references, etc)
-            if ch == '\n' and not in_char_class and not in_string:
+            if ch == '\n' and not in_char_class and not in_string and paren_depth == 0:
                 # Check if this looks like end of pattern
                 if self.pos > start_pos:
                     # Peek ahead to see if there's a {
@@ -266,6 +288,7 @@ class YalexParser:
         return pattern
     
     def _parse_action(self) -> str:
+        """Parse action code inside { ... }, handling nested braces and comments"""
         if self._current_char() != '{':
             return ''
         
@@ -277,6 +300,18 @@ class YalexParser:
         
         while self.pos < len(self.content) and brace_count > 0:
             ch = self._current_char()
+            
+            # Handle yalex block comments (* ... *)
+            if ch == '(' and self._peek_char() == '*':
+                self._advance()  # skip (
+                self._advance()  # skip *
+                while self.pos < len(self.content):
+                    if self._current_char() == '*' and self._peek_char() == ')':
+                        self._advance()  # skip *
+                        self._advance()  # skip )
+                        break
+                    self._advance()
+                continue
             
             # Handle string literals to avoid counting braces inside strings
             if ch in ('"', "'"):
@@ -311,15 +346,42 @@ class YalexParser:
         return action_content
     
     def _parse_trailer(self):
-        start_pos = self.pos
+        """Parse trailer code (optional, can be inside { ... })"""
+        self._skip_whitespace_and_comments()
         
-        # Read everything remaining
-        while self.pos < len(self.content):
-            self._advance()
-        
-        trailer = self.content[start_pos:].strip()
-        if trailer:
-            self.spec.trailer = trailer
+        # Check if trailer is enclosed in braces
+        if self._current_char() == '{':
+            self._advance()  # skip opening {
+            
+            # Find matching closing brace
+            brace_count = 1
+            start_pos = self.pos
+            
+            while self.pos < len(self.content) and brace_count > 0:
+                ch = self._current_char()
+                if ch == '{':
+                    brace_count += 1
+                elif ch == '}':
+                    brace_count -= 1
+                
+                if brace_count > 0:
+                    self._advance()
+            
+            trailer_content = self.content[start_pos:self.pos].strip()
+            self.spec.trailer = trailer_content
+            
+            if self._current_char() == '}':
+                self._advance()  # skip closing }
+        else:
+            # No braces, read everything remaining as trailer
+            start_pos = self.pos
+            
+            while self.pos < len(self.content):
+                self._advance()
+            
+            trailer = self.content[start_pos:].strip()
+            if trailer:
+                self.spec.trailer = trailer
     
     def _match_keyword(self, keyword: str) -> bool:
         end_pos = self.pos + len(keyword)
