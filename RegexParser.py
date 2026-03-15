@@ -1,3 +1,55 @@
+def expand_char_class(class_token: str) -> set:
+
+    inner = class_token[1:-1].strip()   # eliminar [ y ]
+    negated = inner.startswith('^')
+    if negated:
+        inner = inner[1:].strip()
+ 
+    tokens = _tokenize_class_inner(inner)
+    chars = set()
+    j = 0
+    while j < len(tokens):
+        if j + 2 < len(tokens) and tokens[j + 1] == '-':
+            start = tokens[j]
+            end   = tokens[j + 2]
+            for code in range(ord(start), ord(end) + 1):
+                chars.add(chr(code))
+            j += 3
+        else:
+            chars.add(tokens[j])
+            j += 1
+ 
+    if negated:
+        all_printable = set(chr(i) for i in range(32, 127))
+        chars = all_printable - chars
+ 
+    return chars
+ 
+ 
+def _tokenize_class_inner(inner: str) -> list:
+    tokens = []
+    i = 0
+    while i < len(inner):
+        c = inner[i]
+        if c == "'":
+            # Secuencia de escape: '\n' o carácter simple: 'a'
+            if i + 1 < len(inner) and inner[i + 1] == '\\':
+                escape_map = {'n': '\n', 't': '\t', 'r': '\r', '\\': '\\', "'": "'"}
+                ch = escape_map.get(inner[i + 2], inner[i + 2])
+                tokens.append(ch)
+                i += 4
+            else:
+                tokens.append(inner[i + 1])
+                i += 3
+        elif c == '-':
+            tokens.append('-')
+            i += 1
+        elif c in ' \t':
+            i += 1
+        else:
+            tokens.append(c)
+            i += 1
+    return tokens
 
 class Sym:
     __slots__ = ('value',)
@@ -39,13 +91,13 @@ class RegexParser:
         return result
 
 
-    # Paso 1 — Tokenización
+    # Paso 1 — Tokenizacion 
     def _tokenize(self, regex: str) -> list:
         tokens = []
         i = 0
         while i < len(regex):
             c = regex[i]
-
+ 
             # Entre comillas simples: 'a' o '\n'
             if c == "'":
                 j = i + 1
@@ -59,8 +111,8 @@ class RegexParser:
                 else:
                     i += 1
                 continue
-
-            # Entre comillas dobles: "abc" o "a\nb"
+ 
+            # Entre comillas dobles: "abc"
             if c == '"':
                 j = i + 1
                 while j < len(regex) and regex[j] != '"':
@@ -72,43 +124,38 @@ class RegexParser:
                         j += 1
                 i = j + 1
                 continue
-
-            # Clases de caracteres: [a-z] o [^0-9]
+ 
+            # Clases de caracteres: ['a'-'z'] o [^'0'-'9']
             if c == '[':
                 j = i + 1
                 while j < len(regex) and regex[j] != ']':
                     j += 1
-                tokens.append(Sym(regex[i:j + 1]))
+                char_set = expand_char_class(regex[i:j + 1])
+                tokens.append(Sym(char_set))
                 i = j + 1
                 continue
-
-            # Operadores y paréntesis
-            if c in '()|*+?#':
+ 
+            # Operadores y paréntesis -> siempre Op
+            if c in '()|*+?':
                 tokens.append(Op(c))
                 i += 1
                 continue
-
+ 
             # Ignorar espacios en blanco
             if c in ' \t\n\r':
                 i += 1
                 continue
-
-            # Token especial 'eof' para marcar el final de la entrada
-            if regex[i:i + 3] == 'eof':
-                tokens.append(Sym('eof'))
-                i += 3
-                continue
-
-            # Marcadores especiales para tokens
+ 
+            # Marcadores Unicode privados (de RegexUnifier)
             if ord(c) >= 0xE000:
                 tokens.append(Sym(c))
                 i += 1
                 continue
-
+ 
             # Carácter simple
             tokens.append(Sym(c))
             i += 1
-
+ 
         return tokens
 
     def _unescape(self, c: str) -> str:
@@ -153,7 +200,7 @@ class RegexParser:
                 while op_stack and op_stack[-1].value != '(':
                     output.append(op_stack.pop())
                 if op_stack:
-                    op_stack.pop()  # discard '('
+                    op_stack.pop()  # descartar '('
 
             elif v in UNARY_POSTFIX:
                 output.append(tok)
@@ -173,13 +220,18 @@ class RegexParser:
 
 
 if __name__ == "__main__":
-    cases = [
-        ("'a'|'b'",       "alternation"),
-        ("'a''b'",        "concat"),
-        ("['a'-'z']+",    "class+"),
-        ("'+'|'-'|'*'",   "operator literals"),
-        ("('a'|'b')*'c'", "group*concat"),
-    ]
-    for regex, desc in cases:
-        p = RegexParser(regex)
-        print(f"{desc:25s} → {p.to_postfix()}")
+    from SpecParser import SpecParser
+    from MacroExpander import MacroExpander
+    from RegexUnifier import RegexUnifier
+    import sys
+    parser = SpecParser(sys.argv[1])
+    tokens, macros = parser.parse()
+
+    expander = MacroExpander(tokens, macros)
+    expanded = expander.expand()
+
+    unifier = RegexUnifier(expanded)
+    unified, tokensUnified = unifier.unify()
+
+    p = RegexParser(unified)
+    print(f"{p.to_postfix()}")

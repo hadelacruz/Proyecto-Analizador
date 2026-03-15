@@ -48,14 +48,16 @@ class DirectDFAConstructor:
             current = worklist.pop()
 
             # Recopilar todos los símbolos que aparecen en current.positions
-            symbol_map: dict[str, set[int]] = {}
+            symbol_groups: dict = {}
             for pos in current.positions:
                 leaf = self.position_map[pos]
                 syms = leaf.symbol if isinstance(leaf.symbol, set) else {leaf.symbol}
                 for sym in syms:
-                    symbol_map.setdefault(sym, set()).add(pos)
+                    if sym == '#':
+                        continue   # '#' es marcador de aceptación, no transiciona
+                    symbol_groups.setdefault(sym, set()).add(pos)
 
-            for sym, positions_with_sym in symbol_map.items():
+            for sym, positions_with_sym in symbol_groups.items():
                 # Nuevo estado = unión de followpos de todas las posiciones que leen sym
                 next_positions = frozenset(
                     p for pos in positions_with_sym
@@ -108,14 +110,12 @@ class DirectDFAConstructor:
 
     def _mark_accepting(self, state: DFAState):
         for pos in state.positions:
-            leaf = self.position_map[pos]
-            sym  = leaf.symbol
-            if isinstance(sym, str) and sym in self.marker_to_token:
-                token = self.marker_to_token[sym]
+            if pos in self.marker_to_token:
+                token = self.marker_to_token[pos]
                 if token.priority < state.token_priority:
-                    state.is_accepting   = True
-                    state.token_name     = token.name
-                    state.token_priority = token.priority
+                    state.is_accepting    = True
+                    state.token_name      = token.name
+                    state.token_priority  = token.priority
 
 
     def _split_group(self, group: list[DFAState],
@@ -166,38 +166,36 @@ class DirectDFAConstructor:
 
 
 if __name__ == "__main__":
-    from SpecParser import SpecParser, TokenSpec
-    from MacroExpander import MacroExpander
+    from SpecParser   import TokenSpec
     from RegexUnifier import RegexUnifier
-    from RegexParser import RegexParser
-
+    from RegexParser  import RegexParser
+    from SyntaxTreeBuilder import SyntaxTreeBuilder
+ 
     tokens = [
-        TokenSpec("ID",     "(['a'-'z']['A'-'Z'])((['a'-'z']['A'-'Z'])|['0'-'9'])*", 1),
+        TokenSpec("ID",     "(['a'-'z''A'-'Z''_'])(['a'-'z''A'-'Z''_']|['0'-'9'])*", 1),
         TokenSpec("NUMBER", "['0'-'9']+", 2),
         TokenSpec("PLUS",   "'+'", 3),
     ]
-    macros = {}
-
-    unifier = RegexUnifier(tokens)
-    unified, marker_map = unifier.unify()
-
-    parser  = RegexParser(unified)
-    postfix = parser.to_postfix()
-
-    builder  = SyntaxTreeBuilder(postfix)
-    root     = builder.build()
-
+ 
+    unifier              = RegexUnifier(tokens)
+    unified, marker_map  = unifier.unify()
+ 
+    postfix = RegexParser(unified).to_postfix()
+    builder = SyntaxTreeBuilder(postfix)
+    root    = builder.build()
+ 
     constructor = DirectDFAConstructor(
         root, builder.followpos, builder.position_map, marker_map
     )
-    start = constructor.build()
+    constructor.build()
     constructor.minimize()
-
-    print(f"States: {len(constructor.states)}")
-    print(f"Start:  {constructor.start_state}")
-    for state in constructor.states:
-        if state.is_accepting:
-            print(f"  {state} accepts {state.token_name}")
-        for sym, target in sorted(state.transitions.items()):
+ 
+    print(f"Estados (minimizado): {len(constructor.states)}")
+    for s in constructor.states:
+        accepting_info = ""
+        if s.is_accepting:
+            accepting_info = f" [ACCEPT: {s.token_name} (prioridad {s.token_priority})]"
+        print(f"  {s}{accepting_info}")
+        for sym, tgt in sorted(s.transitions.items()):
             if ord(sym) < 128:
-                print(f"  {state} --{sym!r}--> {target}")
+                print(f"    --{sym!r}--> {tgt}")
