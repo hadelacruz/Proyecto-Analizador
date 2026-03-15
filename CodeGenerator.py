@@ -69,7 +69,7 @@ class CodeGenerator:
         lines.append("# Nombres de tokens que usan tabla de símbolos (identificadores)")
         lines.append("ID_TOKENS: set[str] = {")
         id_tokens = {s.token_name for s in self.states
-                     if s.is_accepting and s.token_name and 'ID' in s.token_name}
+                     if s.is_accepting and s.token_name == 'ID'}
         for name in sorted(id_tokens):
             lines.append(f"    {name!r},")
         lines.append("}")
