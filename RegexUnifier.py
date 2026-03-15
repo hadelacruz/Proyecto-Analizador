@@ -19,6 +19,22 @@ class RegexUnifier:
         unified = '|'.join(branches)
         return unified, list(self.tokens)
 
+def build_marker_map(position_map: dict, tokens_ordered: list) -> dict:
+    hash_positions = sorted(
+        pos for pos, node in position_map.items()
+        if node.symbol == ACCEPT_MARKER
+    )
+ 
+    if len(hash_positions) != len(tokens_ordered):
+        raise ValueError(
+            f"Mismatch: {len(hash_positions)} símbolos '#' en el árbol "
+            f"pero {len(tokens_ordered)} tokens definidos."
+        )
+ 
+    return {
+        pos: token
+        for pos, token in zip(hash_positions, tokens_ordered)
+    }
 
 if __name__ == "__main__":
     from SpecParser import SpecParser
